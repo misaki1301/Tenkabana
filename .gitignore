@@ -14,3 +14,4 @@ Assets/tenka.ico
 # publish output and bundled third-party tool
 publish/
 Installer/astudio/
+.vs/
