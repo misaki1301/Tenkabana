@@ -10,3 +10,7 @@ settings.json
 # them, the repo does not ship them. See README (Portraits).
 Assets/portraits/*.png
 Assets/tenka.ico
+
+# publish output and bundled third-party tool
+publish/
+Installer/astudio/
