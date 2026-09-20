@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -8,7 +8,11 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>Tenkabana</AssemblyName>
     <RootNamespace>Tenkabana</RootNamespace>
+    <!-- Derived from game art, so gitignored. The condition keeps the build
+         working for anyone cloning without it. -->
+    <ApplicationIcon Condition="Exists('Assets\tenka.ico')">Assets\tenka.ico</ApplicationIcon>
   </PropertyGroup>
+
   <ItemGroup>
     <Content Include="Assets\portraits\*.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
