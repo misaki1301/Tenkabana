@@ -1,0 +1,4 @@
+{
+  "_comment": "Copy to settings.json next to the exe only if auto-detection fails.",
+  "gameDirectory": "D:\\Games\\SONGforPRISM"
+}

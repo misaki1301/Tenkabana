@@ -1,0 +1,11 @@
+# build
+bin/
+obj/
+*.user
+
+# runtime config: machine specific
+settings.json
+
+# Extracted game assets. These are Bandai Namco's, not ours - the tool makes
+# them, the repo does not ship them. See README (Portraits).
+Assets/portraits/*.png

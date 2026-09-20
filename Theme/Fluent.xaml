@@ -1,0 +1,184 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+  <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
+  <FontFamily x:Key="TextFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+  <sys:Double x:Key="TitleSize">28</sys:Double>
+  <sys:Double x:Key="SubtitleSize">20</sys:Double>
+  <sys:Double x:Key="BodySize">14</sys:Double>
+  <sys:Double x:Key="CaptionSize">12</sys:Double>
+
+  <Color x:Key="TextPrimaryColor">#E4000000</Color>
+  <Color x:Key="TextSecondaryColor">#9B000000</Color>
+  <Color x:Key="LayerColor">#B3FFFFFF</Color>
+  <Color x:Key="LayerAltColor">#80FFFFFF</Color>
+  <Color x:Key="StrokeColor">#14000000</Color>
+  <Color x:Key="StrokeStrongColor">#29000000</Color>
+  <Color x:Key="AccentColor">#4C7EFF</Color>
+
+  <SolidColorBrush x:Key="TextPrimary" Color="{DynamicResource TextPrimaryColor}"/>
+  <SolidColorBrush x:Key="TextSecondary" Color="{DynamicResource TextSecondaryColor}"/>
+  <SolidColorBrush x:Key="Layer" Color="{DynamicResource LayerColor}"/>
+  <SolidColorBrush x:Key="LayerAlt" Color="{DynamicResource LayerAltColor}"/>
+  <SolidColorBrush x:Key="Stroke" Color="{DynamicResource StrokeColor}"/>
+  <SolidColorBrush x:Key="StrokeStrong" Color="{DynamicResource StrokeStrongColor}"/>
+  <SolidColorBrush x:Key="Accent" Color="{DynamicResource AccentColor}"/>
+
+  <Style x:Key="TitleText" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+    <Setter Property="FontSize" Value="{StaticResource TitleSize}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+  </Style>
+  <Style x:Key="SubtitleText" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+    <Setter Property="FontSize" Value="{StaticResource SubtitleSize}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+  </Style>
+  <Style x:Key="BodyText" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+    <Setter Property="FontSize" Value="{StaticResource BodySize}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+  </Style>
+  <Style x:Key="CaptionText" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+    <Setter Property="FontSize" Value="{StaticResource CaptionSize}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+  </Style>
+
+  <Style x:Key="Card" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource Layer}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Stroke}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+  </Style>
+
+  <Style x:Key="BaseButton" TargetType="Button">
+    <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+    <Setter Property="FontSize" Value="{StaticResource BodySize}"/>
+    <Setter Property="Padding" Value="16,7"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="SnapsToDevicePixels" Value="True"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="b" Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="6" Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="b" Property="Opacity" Value="0.88"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="b" Property="Opacity" Value="0.72"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="b" Property="Opacity" Value="0.4"/>
+              <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+    <Setter Property="Background" Value="{DynamicResource Accent}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+
+  <Style x:Key="StandardButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+    <Setter Property="Background" Value="{DynamicResource LayerAlt}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource StrokeStrong}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+
+  <Style x:Key="Chip" TargetType="ToggleButton">
+    <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+    <Setter Property="FontSize" Value="{StaticResource CaptionSize}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Padding" Value="12,5"/>
+    <Setter Property="Margin" Value="0,0,8,0"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToggleButton">
+          <Border x:Name="b" CornerRadius="14" Padding="{TemplateBinding Padding}"
+                  Background="{DynamicResource LayerAlt}"
+                  BorderBrush="{DynamicResource StrokeStrong}" BorderThickness="1">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="b" Property="Background" Value="{DynamicResource Accent}"/>
+              <Setter TargetName="b" Property="BorderThickness" Value="0"/>
+              <Setter Property="Foreground" Value="White"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="b" Property="Opacity" Value="0.85"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="IdolTile" TargetType="ListBoxItem">
+    <Setter Property="Margin" Value="0,0,12,12"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ListBoxItem">
+          <Grid>
+            <Border x:Name="ring" CornerRadius="10" Background="Transparent"
+                    BorderBrush="Transparent" BorderThickness="2"/>
+            <ContentPresenter Margin="2"/>
+            <Border x:Name="check" Width="22" Height="22" CornerRadius="11"
+                    Background="{DynamicResource Accent}" Visibility="Collapsed"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0">
+              <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                         FontSize="11" Foreground="White"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ring" Property="BorderBrush" Value="{DynamicResource StrokeStrong}"/>
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="ring" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+              <Setter TargetName="check" Property="Visibility" Value="Visible"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="ThinProgress" TargetType="ProgressBar">
+    <Setter Property="Height" Value="4"/>
+    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+    <Setter Property="Background" Value="{DynamicResource StrokeStrong}"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ProgressBar">
+          <Grid>
+            <Border CornerRadius="2" Background="{TemplateBinding Background}"/>
+            <Border x:Name="PART_Track"/>
+            <Border x:Name="PART_Indicator" CornerRadius="2" HorizontalAlignment="Left"
+                    Background="{TemplateBinding Foreground}"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>
