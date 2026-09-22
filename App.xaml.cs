@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Text;
 using System.Windows;
+using Velopack;
 using Tenkabana.Models;
 using Tenkabana.Services;
 
@@ -134,6 +135,22 @@ public partial class App : Application
             File.WriteAllText(Path.Combine(outDir, "asset-result.txt"), log.ToString(), new UTF8Encoding(false));
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Velopack's contract: Run() must execute first and exactly once, because
+    /// anything before it is re-executed during install, update and uninstall
+    /// hooks. That rules out App.OnStartup, so WPF's generated entry point is
+    /// replaced by this one (see StartupObject in the csproj).
+    /// </summary>
+    [STAThread]
+    public static void Main(string[] args)
+    {
+        VelopackApp.Build().Run();
+
+        var app = new App();
+        app.InitializeComponent();
+        app.Run();
     }
 
     protected override async void OnStartup(StartupEventArgs e)

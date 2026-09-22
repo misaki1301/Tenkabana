@@ -8,10 +8,19 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>Tenkabana</AssemblyName>
     <RootNamespace>Tenkabana</RootNamespace>
+    <Version>1.0.0</Version>
     <!-- Derived from game art, so gitignored. The condition keeps the build
          working for anyone cloning without it. -->
     <ApplicationIcon Condition="Exists('Assets\tenka.ico')">Assets\tenka.ico</ApplicationIcon>
+    <!-- Velopack must run before anything else, which means our own Main.
+         Treating App.xaml as a Page (below) stops WPF generating one. -->
+    <StartupObject>Tenkabana.App</StartupObject>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
 
   <ItemGroup>
     <Content Include="Assets\portraits\*.png">
@@ -21,5 +30,6 @@
 
   <ItemGroup>
     <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
+    <PackageReference Include="Velopack" Version="1.2.158" />
   </ItemGroup>
 </Project>

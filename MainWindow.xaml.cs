@@ -199,6 +199,8 @@ public partial class MainWindow : Window
             IdolList.ItemsSource = Idol.All;
             SubtitleLabel.Text =
                 $"{idx.NameCount:N0} assets indexed  ·  {Idol.All.Count(i => i.AssetCount > 0)} of {Idol.All.Count} characters cached";
+
+            _ = CheckForUpdateAsync();
         }
         catch (Exception ex)
         {
@@ -206,6 +208,14 @@ public partial class MainWindow : Window
             StatusLabel.Text = ex.Message;
             IdolList.ItemsSource = Idol.All;
         }
+    }
+
+    /// <summary>Non-blocking, best effort: a failed check must never hold up startup.</summary>
+    private async Task CheckForUpdateAsync()
+    {
+        var r = await Updater.CheckAsync();
+        if (r.Available && r.Version is not null)
+            SubtitleLabel.Text += $"   ·   update {r.Version} available";
     }
 
     private static ImageSource? LoadPortrait(int id)
@@ -610,7 +620,7 @@ public partial class MainWindow : Window
         var progress = new Progress<(int done, int total, string label)>(p =>
         {
             if (p.total > 0) { Progress.Maximum = p.total; Progress.Value = p.done; }
-            Title = $"Prism Asset Extractor  —  {setName} {p.done}/{p.total}";
+            Title = $"Tenkabana  —  {setName} {p.done}/{p.total}";
         });
 
         try
@@ -622,7 +632,7 @@ public partial class MainWindow : Window
 
             if (ChipBlender.IsChecked == true)
             {
-                Title = $"Prism Asset Extractor  —  converting {setName}";
+                Title = $"Tenkabana  —  converting {setName}";
                 Progress.IsIndeterminate = true;
                 var b = await BlenderExport.ConvertAsync(r.OutputDir, progress, _cts.Token);
                 msg = b.Error is null
@@ -633,7 +643,7 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) { SetBusy(false, "Cancelled."); }
         catch (Exception ex) { SetBusy(false, $"Failed: {ex.Message}"); }
-        finally { Title = "Prism Asset Extractor"; }
+        finally { Title = "Tenkabana"; }
     }
 
     private async void OnExportCostume(object sender, RoutedEventArgs e)
@@ -667,7 +677,7 @@ public partial class MainWindow : Window
                 Progress.Maximum = p.total;
                 Progress.Value = p.done;
             }
-            Title = $"Prism Asset Extractor  —  {code} {p.done}/{p.total}";
+            Title = $"Tenkabana  —  {code} {p.done}/{p.total}";
         });
 
         try
@@ -679,7 +689,7 @@ public partial class MainWindow : Window
 
             if (ChipBlender.IsChecked == true)
             {
-                Title = $"Prism Asset Extractor  —  converting {code}";
+                Title = $"Tenkabana  —  converting {code}";
                 Progress.IsIndeterminate = true;
                 var b = await BlenderExport.ConvertAsync(r.OutputDir, progress, _cts.Token);
                 msg = b.Error is null
@@ -691,7 +701,7 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) { SetBusy(false, "Cancelled."); }
         catch (Exception ex) { SetBusy(false, $"Failed: {ex.Message}"); }
-        finally { Title = "Prism Asset Extractor"; }
+        finally { Title = "Tenkabana"; }
     }
 
     private void OnBrowse(object sender, RoutedEventArgs e)
@@ -745,7 +755,7 @@ public partial class MainWindow : Window
         {
             Progress.Maximum = Math.Max(1, p.total);
             Progress.Value = p.done;
-            Title = $"Prism Asset Extractor  —  {p.done}/{p.total}";
+            Title = $"Tenkabana  —  {p.done}/{p.total}";
         });
 
         try
@@ -760,7 +770,7 @@ public partial class MainWindow : Window
                 int converted = 0, tex = 0;
                 foreach (var dir in Directory.GetDirectories(r.OutputDir))
                 {
-                    Title = $"Prism Asset Extractor  —  converting {System.IO.Path.GetFileName(dir)}";
+                    Title = $"Tenkabana  —  converting {System.IO.Path.GetFileName(dir)}";
                     var b = await BlenderExport.ConvertAsync(dir, progress, _cts.Token);
                     converted += b.Meshes;
                     tex += b.Textures;
@@ -773,7 +783,7 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) { SetBusy(false, "Cancelled."); }
         catch (Exception ex) { SetBusy(false, $"Failed: {ex.Message}"); }
-        finally { Title = "Prism Asset Extractor"; }
+        finally { Title = "Tenkabana"; }
     }
 
     private async void OnRefresh(object sender, RoutedEventArgs e)
@@ -792,7 +802,7 @@ public partial class MainWindow : Window
                 Progress.Maximum = p.total;
                 Progress.Value = p.done;
             }
-            Title = $"Prism Asset Extractor  —  indexing {p.done}/{p.total}";
+            Title = $"Tenkabana  —  indexing {p.done}/{p.total}";
         });
 
         try
@@ -813,7 +823,7 @@ public partial class MainWindow : Window
                 : $"Indexed {added:N0} new assets.");
         }
         catch (Exception ex) { SetBusy(false, $"Refresh failed: {ex.Message}"); }
-        finally { Title = "Prism Asset Extractor"; }
+        finally { Title = "Tenkabana"; }
     }
 
     private static DateTime ReadLastRun()

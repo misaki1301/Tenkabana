@@ -1,7 +1,7 @@
 ﻿<Window x:Class="Tenkabana.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Prism Asset Extractor"
+        Title="Tenkabana"
         Height="880" Width="1480" MinHeight="600" MinWidth="1100"
         WindowStartupLocation="CenterScreen"
         UseLayoutRounding="True" TextOptions.TextRenderingMode="ClearType">
@@ -17,7 +17,7 @@
     <!-- Header -->
     <Grid Grid.Row="0" Margin="0,0,0,18">
       <StackPanel>
-        <TextBlock Text="Prism Asset Extractor" Style="{StaticResource TitleText}"/>
+        <TextBlock Text="Tenkabana" Style="{StaticResource TitleText}"/>
         <TextBlock x:Name="SubtitleLabel" Style="{StaticResource CaptionText}" Margin="0,2,0,0"
                    Text="Loading index..."/>
       </StackPanel>

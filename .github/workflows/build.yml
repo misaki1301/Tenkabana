@@ -1,0 +1,27 @@
+name: build
+
+# Cheap gate on every push and PR: does it still compile?
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['v*']     # tags are handled by release.yml
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore Tenkabana.csproj
+
+      # Build the csproj, not the solution: the .NET 10 SDK on some machines has
+      # a broken Microsoft.NET.Sdk.Common.targets import for solution builds.
+      - name: Build
+        run: dotnet build Tenkabana.csproj -c Release --no-restore -warnaserror

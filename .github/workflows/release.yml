@@ -1,0 +1,97 @@
+name: release
+
+# Tag-driven: push v1.2.3 and this builds, packs and publishes that version.
+# Manual runs produce artifacts without touching GitHub Releases.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g. 1.2.3). Artifacts only, no release.'
+        required: true
+        default: '0.0.1'
+
+permissions:
+  contents: write        # vpk upload github creates the release
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # release notes from history
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Velopack versions must be plain SemVer, so strip the leading v from tags.
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $v = $env:GITHUB_REF -replace '^refs/tags/v', ''
+          } else {
+            $v = '${{ github.event.inputs.version }}'
+          }
+          if (-not $v) { throw 'no version resolved' }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "building $v"
+
+      - name: Restore
+        run: dotnet restore Tenkabana.csproj
+
+      - name: Publish (self-contained, single file)
+        run: >
+          dotnet publish Tenkabana.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:Version=${{ steps.ver.outputs.version }}
+          -o publish
+
+      - name: Install Velopack CLI
+        run: dotnet tool install -g vpk
+
+      # No icon or portraits in CI - both are extracted game art and gitignored.
+      # ApplicationIcon is conditional, so the build simply omits them.
+      - name: Pack
+        run: >
+          vpk pack
+          --packId Tenkabana
+          --packVersion ${{ steps.ver.outputs.version }}
+          --packDir publish
+          --mainExe Tenkabana.exe
+          --packTitle Tenkabana
+          --packAuthors misaki1301
+          -o Releases
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenkabana-${{ steps.ver.outputs.version }}
+          path: |
+            Releases/*.exe
+            Releases/*.zip
+            Releases/*.nupkg
+            Releases/*.json
+          retention-days: 14
+
+      # Only tag pushes publish. Manual runs stop at the artifact above.
+      - name: Publish to GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: >
+          vpk upload github
+          --repoUrl ${{ github.server_url }}/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --tag ${{ github.ref_name }}
+          --releaseName "Tenkabana ${{ steps.ver.outputs.version }}"
+          --merge
+          --publish
+          -o Releases
