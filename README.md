@@ -158,6 +158,44 @@ For a rigged model, point [AssetRipper](https://github.com/AssetRipper/AssetRipp
 at the `.unity3d` bundles left in every export folder and export FBX or glTF.
 Same source data, keeps bone weights and blendshapes.
 
+## Toon shading in Blender
+
+`Blender/tenkabana_toon.py` is a Blender 4.2+ add-on that rebuilds the game's
+cel look, and every `--blender` export gets a copy of it. It's a
+reconstruction, not a port: the game ships its shaders as compiled bytecode, so
+this is node math matched to what the textures and the rendered game show.
+
+- **One key light.** The `TKB Key Light` sun's rotation drives every material.
+  Half-lambert into a hard terminator; the shadow side is base colour × a tint.
+- **`_smask`** moves where the terminator falls, which is how painted folds and
+  under-hair shadow stay put whatever the light does.
+- **`_spmap`** gates a stepped specular. **`_rnoise`** jitters a Kajiya-Kay band
+  on hair, which gives the angel ring its broken-strand edge.
+- **Rim light** and an **inverted-hull outline** tinted from the base colour.
+- Everything is emission, so Eevee and Cycles render the same picture.
+
+`_rmask`'s channels aren't confirmed. G is wired as occlusion at strength 0;
+raise *AO Strength* on the material's Toon node if it reads right.
+
+Install it from *Edit › Preferences › Add-ons › Install from Disk*, then use the
+**Tenkabana** tab in the 3D viewport sidebar: point it at an export folder and
+**Import**. OBJ parts are matched to texture sets by name (`FrontHair` →
+`hair_14_*`); anything it can't place, select and **Assign Texture Set**.
+AssetRipper glTF/FBX exports work too, and keep the rig.
+
+### Template scene
+
+```
+blender -b -P Blender/build_template.py -- --out amana_template.blend
+blender -b -P Blender/build_template.py -- --export D:\out\14_amana --render amana.png
+```
+
+With no `--export`, it builds a stand-in mannequin in Amana's palette from
+generated textures, so the shading can be judged without any game files.
+With one, it imports that export instead. Either way the scene has the camera,
+key light, Standard view transform and the add-on embedded in the `.blend`.
+`--idol` picks someone else; `--engine cycles` renders without a GPU.
+
 ## Portraits
 
 Character tiles use the game's own `Photo_Chr_00NN` textures. **They are not in

@@ -28,6 +28,12 @@
     </Content>
   </ItemGroup>
 
+  <!-- Written into every Blender export by BlenderExport.WriteScripts. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Blender\tenkabana_toon.py" LogicalName="tenkabana_toon.py" />
+    <EmbeddedResource Include="Blender\build_template.py" LogicalName="build_template.py" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
     <PackageReference Include="Velopack" Version="1.2.158" />

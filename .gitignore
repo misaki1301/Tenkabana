@@ -16,3 +16,7 @@ publish/
 Installer/astudio/
 .vs/
 Releases/
+
+# Blender scenes built by Blender/build_template.py
+*.blend
+*.blend1

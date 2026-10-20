@@ -61,9 +61,27 @@ public static class BlenderExport
             int textures = Directory.Exists(texDir)
                 ? Directory.GetFiles(texDir, "*.png", SearchOption.AllDirectories).Length : 0;
 
+            WriteScripts(bundlesDir);
             WriteReadme(bundlesDir, meshes, textures);
             return new BlenderResult(meshes, textures, bundlesDir, null);
         }, ct);
+    }
+
+    /// <summary>Drop the Blender toon add-on and template builder next to the export.</summary>
+    private static void WriteScripts(string dir)
+    {
+        var asm = typeof(BlenderExport).Assembly;
+        foreach (var name in new[] { "tenkabana_toon.py", "build_template.py" })
+        {
+            try
+            {
+                using var src = asm.GetManifestResourceStream(name);
+                if (src is null) continue;
+                using var dst = File.Create(Path.Combine(dir, name));
+                src.CopyTo(dst);
+            }
+            catch (IOException) { }
+        }
     }
 
     private static void WriteReadme(string dir, int meshes, int textures)
@@ -82,8 +100,16 @@ public static class BlenderExport
         sb.AppendLine("  Unity is Y-up and Blender is Z-up; if a part arrives lying on its");
         sb.AppendLine("  back, rotate +90 on X.");
         sb.AppendLine();
+        sb.AppendLine("TOON SHADING (recommended)");
+        sb.AppendLine("  tenkabana_toon.py is a Blender add-on that rebuilds the game's cel look:");
+        sb.AppendLine("  Edit > Preferences > Add-ons > Install from Disk > tenkabana_toon.py,");
+        sb.AppendLine("  then 3D Viewport > N sidebar > Tenkabana > set this folder > Import.");
+        sb.AppendLine("  Meshes come in with toon materials, outlines and body height applied.");
+        sb.AppendLine("  Parts it can't place: select them, Assign Texture Set.");
+        sb.AppendLine("  Or headless:  blender -b -P build_template.py -- --export \"<this folder>\"");
+        sb.AppendLine();
         sb.AppendLine("TEXTURES");
-        sb.AppendLine("  Materials do not survive the trip - wire them up by hand.");
+        sb.AppendLine("  Without the add-on, materials do not survive the trip - wire them by hand.");
         sb.AppendLine("    _col     base colour");
         sb.AppendLine("    _rmask   mask map, roughness/AO packed per channel");
         sb.AppendLine("    _smask   shadow/shading mask");
