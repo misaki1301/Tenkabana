@@ -32,6 +32,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Blender\tenkabana_toon.py" LogicalName="tenkabana_toon.py" />
     <EmbeddedResource Include="Blender\build_template.py" LogicalName="build_template.py" />
+    <EmbeddedResource Include="Blender\prism_extract.py" LogicalName="prism_extract.py" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,7 +4,8 @@
                                        [--render PNG] [--engine eevee|cycles]
 
 --idol     name or id; defaults to the export folder's idol, else Amana
---export   a Tenkabana export folder (meshes/ + textures/, or AssetRipper glTF/FBX).
+--export   a Tenkabana export folder. Uses prism_extract.py's blender/ output
+           when present (exact parts and materials), else meshes/ + textures/.
            Without it, a stand-in mannequin in the idol's palette is built so the
            shading can be judged before any game assets are involved.
 --out      .blend to write (default: <idol>_template.blend next to this script)
@@ -196,9 +197,10 @@ def build_stand_in(idol, coll):
 # ---------------------------------------------------------------------------
 
 def build_stage(coll, target_z=0.82):
-    floor_mat = tkb.build_toon_material("TKB floor", {}, "default")
-    floor_mat.node_tree.nodes["Toon"].inputs["Base Color"].default_value = (0.93, 0.91, 0.95, 1.0)
-    floor_mat.node_tree.nodes["Toon"].inputs["Rim Strength"].default_value = 0.0
+    floor_mat = tkb.build_toon_material("TKB floor", {}, "skin")
+    prism = floor_mat.node_tree.nodes["Prism"].inputs
+    prism["Main Color"].default_value = (0.93, 0.91, 0.95, 1.0)
+    prism["Rim Mask"].default_value = 0.0
     bpy.ops.mesh.primitive_circle_add(vertices=64, radius=1.6, fill_type="NGON")
     floor = bpy.context.active_object
     floor.name = "Floor"

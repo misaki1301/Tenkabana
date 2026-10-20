@@ -136,8 +136,9 @@ groups everything else by looking up its number.
   the outfit.
 - A costume only exists in the cache once the client has downloaded it, which in
   practice means ones you own or have displayed.
-- `_col` base colour, `_rmask` packed mask map, `_smask` shadow, `_spmap`
-  specular, `_rnoise` hair anisotropy.
+- `_col` base colour, `_Rmask` rim-light mask, `_Smask` shadow, `_SPmap`
+  specular (R mask, G roughness, B metallic), `_Rnoise` angel-ring noise. The
+  materials say so: see below.
 
 ## Limitation: no rig
 
@@ -158,43 +159,77 @@ For a rigged model, point [AssetRipper](https://github.com/AssetRipper/AssetRipp
 at the `.unity3d` bundles left in every export folder and export FBX or glTF.
 Same source data, keeps bone weights and blendshapes.
 
-## Toon shading in Blender
+## The game's shading, in Blender
 
-`Blender/tenkabana_toon.py` is a Blender 4.2+ add-on that rebuilds the game's
-cel look, and every `--blender` export gets a copy of it. It's a
-reconstruction, not a port: the game ships its shaders as compiled bytecode, so
-this is node math matched to what the textures and the rendered game show.
+Characters are drawn by five URP shaders: `Anim2D3D/CharacterOutline`,
+`Hair`, `EyeBall`, `FakeShadow` and `Character Unlit`. Their D3D11 bytecode
+ships in the bundles, so their maths can be read (DXBC → SPIR-V with vkd3d →
+GLSL with spirv-cross, with constant-buffer slots named from Unity's parameter
+blobs). `Blender/tenkabana_toon.py` rebuilds them as node groups.
 
-- **One key light.** The `TKB Key Light` sun's rotation drives every material.
-  Half-lambert into a hard terminator; the shadow side is base colour × a tint.
-- **`_smask`** moves where the terminator falls, which is how painted folds and
-  under-hair shadow stay put whatever the light does.
-- **`_spmap`** gates a stepped specular. **`_rnoise`** jitters a Kajiya-Kay band
-  on hair, which gives the angel ring its broken-strand edge.
-- **Rim light** and an **inverted-hull outline** tinted from the base colour.
-- Everything is emission, so Eevee and Cycles render the same picture.
+What they do, which isn't what a toon shader usually does:
 
-`_rmask`'s channels aren't confirmed. G is wired as occlusion at strength 0;
-raise *AO Strength* on the material's Toon node if it reads right.
+- **Shading is mostly painted.** Diffuse is `albedo × lerp(_DarkColor,
+  _BrightColor, ramp)`, where the ramp thresholds `ShadeTex.r × ½(N·L + 1)` and
+  the result is scaled by `_ShadeEffect`. Skin and face set Dark = Bright,
+  so they get no light-dependent shadow. Amana's 14mgar dress gets a faint
+  purple one.
+- **`_SPmap`** packs specular mask / roughness / metallic for a GGX-style
+  highlight (the game takes a square root of it). **`_Rmask`** gates a
+  view-dependent rim.
+- **The angel ring** isn't in the hair texture. The view ray is intersected
+  with a 12 cm sphere at the head centre, and that direction, jittered by
+  `_Rnoise` on the second UV set, samples a ring cubemap.
+- **The fake hair shadow** is the front hair drawn again 6 mm away from the
+  light as a flat multiply, stencilled onto the face.
+- **Outlines** extrude along directions baked into the mesh tangents, sideways
+  in screen space only, pushed back in depth, masked by `_OutlineTex`.
+- **It's gamma-space.** The maths runs on raw sRGB values.
 
-Install it from *Edit › Preferences › Add-ons › Install from Disk*, then use the
-**Tenkabana** tab in the 3D viewport sidebar: point it at an export folder and
-**Import**. OBJ parts are matched to texture sets by name (`FrontHair` →
-`hair_14_*`); anything it can't place, select and **Assign Texture Set**.
-AssetRipper glTF/FBX exports work too, and keep the rig.
+A few inputs are per-stage globals set at runtime (rim power, diffuse border,
+light colour). They aren't in any bundle, so they live in one **TKB Prism
+Globals** group with values chosen by eye, editable from the sidebar.
+
+### Getting the exact materials
+
+```
+pip install UnityPy
+python Blender/prism_extract.py D:\out\14mgar
+```
+
+This reads the export's bundles and writes `blender/` next to them:
+
+- `model.glb`: each part as its own object, with both UV sets, real submesh
+  material slots and the baked outline directions
+- `materials.json`: which part uses which material, with every value the
+  game's materials set
+- the referenced textures, with the ring cubemap unwrapped to an equirect
+
+It also resolves the base-body placeholders the way the game does at runtime:
+face parts get the costume's face material, eyes get the eye material, and
+parts the costume replaces are dropped. Every `--blender` export includes the
+script.
+
+Then install `tenkabana_toon.py` (*Edit › Preferences › Add-ons › Install from
+Disk*) and use **Import** in the **Tenkabana** sidebar tab. Without the
+extractor's output, Import falls back to matching OBJ parts to textures by name
+with typical material values. That's close, but not exact.
 
 ### Template scene
 
 ```
+blender -b -P Blender/build_template.py -- --export D:\out\14mgar --render amana.png
 blender -b -P Blender/build_template.py -- --out amana_template.blend
-blender -b -P Blender/build_template.py -- --export D:\out\14_amana --render amana.png
 ```
 
-With no `--export`, it builds a stand-in mannequin in Amana's palette from
-generated textures, so the shading can be judged without any game files.
-With one, it imports that export instead. Either way the scene has the camera,
-key light, Standard view transform and the add-on embedded in the `.blend`.
-`--idol` picks someone else; `--engine cycles` renders without a GPU.
+With `--export`, it builds a camera, key light, stage and the imported
+character. Without it, it builds a stand-in mannequin in Amana's palette from
+generated textures. `--idol` picks someone else; `--engine cycles` renders
+without a GPU.
+
+**Not reproduced:** real-time self-shadows (the game's `PrismSelfShadow` map
+feeds the same Dark→Bright ramp), the per-character light buffer, expressions
+(the face's blendshapes aren't exported yet) and the rig.
 
 ## Portraits
 

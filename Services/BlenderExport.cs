@@ -67,11 +67,11 @@ public static class BlenderExport
         }, ct);
     }
 
-    /// <summary>Drop the Blender toon add-on and template builder next to the export.</summary>
+    /// <summary>Drop the Blender add-on, template builder and material extractor next to the export.</summary>
     private static void WriteScripts(string dir)
     {
         var asm = typeof(BlenderExport).Assembly;
-        foreach (var name in new[] { "tenkabana_toon.py", "build_template.py" })
+        foreach (var name in new[] { "tenkabana_toon.py", "build_template.py", "prism_extract.py" })
         {
             try
             {
@@ -100,21 +100,26 @@ public static class BlenderExport
         sb.AppendLine("  Unity is Y-up and Blender is Z-up; if a part arrives lying on its");
         sb.AppendLine("  back, rotate +90 on X.");
         sb.AppendLine();
-        sb.AppendLine("TOON SHADING (recommended)");
-        sb.AppendLine("  tenkabana_toon.py is a Blender add-on that rebuilds the game's cel look:");
-        sb.AppendLine("  Edit > Preferences > Add-ons > Install from Disk > tenkabana_toon.py,");
-        sb.AppendLine("  then 3D Viewport > N sidebar > Tenkabana > set this folder > Import.");
-        sb.AppendLine("  Meshes come in with toon materials, outlines and body height applied.");
-        sb.AppendLine("  Parts it can't place: select them, Assign Texture Set.");
+        sb.AppendLine("GAME SHADING (recommended)");
+        sb.AppendLine("  1. pip install UnityPy");
+        sb.AppendLine("     python prism_extract.py \"<this folder>\"");
+        sb.AppendLine("     Reads the bundles here and writes blender/: model.glb with every part");
+        sb.AppendLine("     and both UV sets, materials.json with the game's material values, and");
+        sb.AppendLine("     the textures those use.");
+        sb.AppendLine("  2. In Blender: Edit > Preferences > Add-ons > Install from Disk >");
+        sb.AppendLine("     tenkabana_toon.py, then N sidebar > Tenkabana > set this folder > Import.");
+        sb.AppendLine("     Parts come in with the game's shaders rebuilt as nodes, outlines, the");
+        sb.AppendLine("     fake hair shadow and body height applied.");
         sb.AppendLine("  Or headless:  blender -b -P build_template.py -- --export \"<this folder>\"");
+        sb.AppendLine("  Skipping step 1 still works: parts are matched to textures by name.");
         sb.AppendLine();
         sb.AppendLine("TEXTURES");
         sb.AppendLine("  Without the add-on, materials do not survive the trip - wire them by hand.");
         sb.AppendLine("    _col     base colour");
-        sb.AppendLine("    _rmask   mask map, roughness/AO packed per channel");
-        sb.AppendLine("    _smask   shadow/shading mask");
-        sb.AppendLine("    _spmap   specular");
-        sb.AppendLine("    _rnoise  hair anisotropy noise");
+        sb.AppendLine("    _Rmask   rim light mask (R)");
+        sb.AppendLine("    _Smask   shadow/shading mask");
+        sb.AppendLine("    _SPmap   specular: R mask, G roughness, B metallic");
+        sb.AppendLine("    _Rnoise  angel ring noise (hair, second UV set)");
         sb.AppendLine("    _bs_a / _bs_b / _bss   blendshape-related maps");
         sb.AppendLine();
         sb.AppendLine("LIMITATION - NO RIG");
