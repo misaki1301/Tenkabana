@@ -72,8 +72,13 @@ BODY = {
 # are chosen to match how characters look in the game's menus.
 GLOBALS = (
     ("Light Color", "RGBA", (1.0, 1.0, 1.0, 1.0)),
-    ("Diffuse Border", "VALUE", 0.5),
-    ("Diffuse Blur", "VALUE", 0.1),
+    # Skin and face materials ship Dark = Bright (no shadow); the game swaps in
+    # a warm shadow colour at runtime. Measured from an in-game screenshot:
+    # shadowed skin = texture * (0.886, 0.745, 0.739) = Dark + 0.5.
+    ("Skin Shadow", "RGBA", (0.386, 0.245, 0.239, 1.0)),
+    # The face's constant t = 0.5 must stay lit, and the arm terminator is crisp.
+    ("Diffuse Border", "VALUE", 0.45),
+    ("Diffuse Blur", "VALUE", 0.05),
     ("Rim Power", "VALUE", 3.0),
     ("Rim Intensity", "VALUE", 1.0),
     ("Rim Border", "VALUE", 0.55),
@@ -250,6 +255,29 @@ def ensure_key_light(scene=None):
     return obj
 
 
+LIGHT_PROP = "tkb_light_dir"
+
+
+def ensure_light_property(scene, light=None):
+    """scene["tkb_light_dir"]: the key light's +Z axis, kept current by drivers."""
+    light = light or ensure_key_light(scene)
+    if LIGHT_PROP in scene and scene.animation_data and any(
+            fc.data_path == f'["{LIGHT_PROP}"]' for fc in scene.animation_data.drivers):
+        return
+    scene[LIGHT_PROP] = [0.0, 0.0, 1.0]
+    for i in range(3):
+        fc = scene.driver_add(f'["{LIGHT_PROP}"]', i)
+        fc.driver.type = "SCRIPTED"
+        for var_name, channel in (("rx", "ROT_X"), ("ry", "ROT_Y"), ("rz", "ROT_Z")):
+            v = fc.driver.variables.new()
+            v.name = var_name
+            v.type = "TRANSFORMS"
+            v.targets[0].id = light
+            v.targets[0].transform_type = channel
+            v.targets[0].transform_space = "WORLD_SPACE"
+        fc.driver.expression = _AXIS_EXPR[i]
+
+
 def ensure_globals():
     tree = bpy.data.node_groups.get(GLOBALS_GROUP)
     if tree is not None:
@@ -262,20 +290,12 @@ def ensure_globals():
     g = _Graph(tree)
     out = g.node("NodeGroupOutput")
 
-    comb = g.node("ShaderNodeCombineXYZ")
-    comb.name = "Light Axis"
-    for i in range(3):
-        fc = comb.inputs[i].driver_add("default_value")
-        fc.driver.type = "SCRIPTED"
-        for var_name, channel in (("rx", "ROT_X"), ("ry", "ROT_Y"), ("rz", "ROT_Z")):
-            v = fc.driver.variables.new()
-            v.name = var_name
-            v.type = "TRANSFORMS"
-            v.targets[0].id = light
-            v.targets[0].transform_type = channel
-            v.targets[0].transform_space = "WORLD_SPACE"
-        fc.driver.expression = _AXIS_EXPR[i]
-    g.feed(out.inputs["Light Direction"], g.vec("NORMALIZE", comb.outputs[0]))
+    # Read from a driven scene property: drivers inside node groups don't
+    # evaluate reliably once the group is nested in another group at render.
+    ensure_light_property(bpy.context.scene, light)
+    axis = g.node("ShaderNodeAttribute", attribute_type="VIEW_LAYER", attribute_name=LIGHT_PROP)
+    axis.name = "Light Axis"
+    g.feed(out.inputs["Light Direction"], g.vec("NORMALIZE", axis.outputs["Vector"]))
 
     for name, kind, default in GLOBALS:
         node = g.node("ShaderNodeRGB" if kind == "RGBA" else "ShaderNodeValue")
@@ -554,7 +574,7 @@ def _uv_offset(g, uv_socket, offset):
     return g.vec("ADD", uv_socket, (offset[0], -offset[1], 0.0))
 
 
-def build_prism_material(name, info, images, uv2=None):
+def build_prism_material(name, info, images, uv2=None, role=None, ring=None):
     """A material following the game's shader for `info` (a materials.json entry).
 
     images: texture name -> path or bpy Image. uv2: name of the second UV layer.
@@ -643,7 +663,10 @@ def build_prism_material(name, info, images, uv2=None):
         shade = sample("_ShadeTex")
         if shade:
             g.feed(I["Shade Mask"], channel(shade, 0))
-        g.feed(I["Dark Color"], _col(info, "_DarkColor", (0.5, 0.5, 0.5, 1)))
+        if role in ("skin", "face"):
+            g.feed(I["Dark Color"], _group_node(g, ensure_globals()).outputs["Skin Shadow"])
+        else:
+            g.feed(I["Dark Color"], _col(info, "_DarkColor", (0.5, 0.5, 0.5, 1)))
         g.feed(I["Bright Color"], _col(info, "_BrightColor", (0.5, 0.5, 0.5, 1)))
         g.feed(I["Shade Effect"], _flt(info, "_ShadeEffect", 0.2))
         g.feed(I["Shade On"], _flt(info, "_ShadeOn", 1.0))
@@ -669,9 +692,10 @@ def build_prism_material(name, info, images, uv2=None):
         if ring_img is None:
             ring_img = procedural_ring_image()
         vec = _group_node(g, ensure_ring_group())
-        center = _col(info, "_CenterPos", (0.0, 1.44, 0.0, 0.0))
+        # The controller's live values beat the material's editor snapshot.
+        center = ring["center"] if ring else _col(info, "_CenterPos", (0.0, 1.44, 0.0, 0.0))
         g.feed(vec.inputs["Head Center"], _unity_to_blender(center))
-        g.feed(vec.inputs["Head Radius"], _flt(info, "_Radius", 0.12))
+        g.feed(vec.inputs["Head Radius"], ring["radius"] if ring else _flt(info, "_Radius", 0.12))
         g.feed(vec.inputs["Noise Scale"], _flt(info, "_AngelRingNoiseScale", 0.2))
         g.feed(vec.inputs["Noise Offset"], _flt(info, "_AngelRingNoiseOffset", 0.9))
         noise = sample("_NoiseTex", uv2)
@@ -993,6 +1017,7 @@ def import_prism(folder, idol=None, outline=True):
             o.parent = root
 
     built = {}
+    role_of = {m: r for r, m in data.get("roles", {}).items()}
     for entry in data["objects"]:
         obj = meshes.get(entry["name"])
         if obj is None:
@@ -1005,7 +1030,8 @@ def import_prism(folder, idol=None, outline=True):
                 continue
             key = (mname, uv2)
             if key not in built:
-                built[key] = build_prism_material(f"TKB {mname}", info, images, uv2)
+                built[key] = build_prism_material(f"TKB {mname}", info, images, uv2, role_of.get(mname),
+                                                  data.get("angel_ring"))
             old = slot.material
             slot.material = built[key]
             if old is not None and old.users == 0:
@@ -1112,7 +1138,7 @@ def build_toon_material(name, maps, part="default"):
             key = f"{name}:{kind}"
             images[key] = maps[kind]
             info["textures"][prop] = {"name": key}
-    return build_prism_material(name, info, images)
+    return build_prism_material(name, info, images, role=part if part in ("skin", "face") else None)
 
 
 def toonify_object(obj, sets, idol=None, outline=True, width=None):
@@ -1147,6 +1173,8 @@ def apply_body(roots, idol, objects=None):
         keys = getattr(getattr(obj, "data", None), "shape_keys", None)
         if keys:
             for kb in keys.key_blocks:
+                # 'bust_up' on the costume's body and coat; the game drives it
+                # with the idol's bust parameter (0..1 of the full shape).
                 if any(t in kb.name.lower() for t in ("bust", "mune", "breast")):
                     kb.value = body["bust"]
 
@@ -1223,7 +1251,7 @@ def setup_scene(scene=None):
     if bg is not None:
         bg.inputs["Color"].default_value = (0.82, 0.80, 0.86, 1.0)
         bg.inputs["Strength"].default_value = 1.0
-    ensure_key_light(scene)
+    ensure_light_property(scene, ensure_key_light(scene))
     ensure_globals()
 
 

@@ -188,19 +188,33 @@ What they do, which isn't what a toon shader usually does:
 
 A few inputs are per-stage globals set at runtime (rim power, diffuse border,
 light colour). They aren't in any bundle, so they live in one **TKB Prism
-Globals** group with values chosen by eye, editable from the sidebar.
+Globals** group, editable from the sidebar. Where a screenshot pins them down,
+they're measured rather than guessed:
+
+- **Skin shadow.** Skin and face materials ship Dark = Bright (no shadow), but
+  in-game shadowed skin is exactly texture × (0.886, 0.745, 0.739). The game
+  swaps in a warm Dark colour at runtime; *Skin Shadow* reproduces it, and the
+  rendered shadow matches the screenshot within one level per channel.
+- **Diffuse border.** 0.45 with a hard 0.05 blur. The face (ShadeOn = 0, t fixed
+  at 0.5) has to stay lit, and the arm terminator in-game is 2–3 px wide.
 
 ### Getting the exact materials
 
 ```
 pip install UnityPy
-python Blender/prism_extract.py D:\out\14mgar
+python Blender/prism_extract.py D:\out\14mgar [D:\out\14_amana ...]
 ```
+
+Pass several folders to merge a costume with the idol's own face/character
+export. A costume prefab only carries generic stand-ins for the eyes, lashes,
+teeth and brows (from a shared `new_anim.fbx`), so the eye shape and the
+smile expressions only appear once the idol's face prefab is included.
 
 This reads the export's bundles and writes `blender/` next to them:
 
 - `model.glb`: each part as its own object, with both UV sets, real submesh
-  material slots and the baked outline directions
+  material slots, the baked outline directions and the blendshapes as shape
+  keys (bust gets the idol's value; eye close, A/I/U/E/O are there to pose)
 - `materials.json`: which part uses which material, with every value the
   game's materials set
 - the referenced textures, with the ring cubemap unwrapped to an equirect
@@ -228,8 +242,9 @@ generated textures. `--idol` picks someone else; `--engine cycles` renders
 without a GPU.
 
 **Not reproduced:** real-time self-shadows (the game's `PrismSelfShadow` map
-feeds the same Dark→Bright ramp), the per-character light buffer, expressions
-(the face's blendshapes aren't exported yet) and the rig.
+feeds the same Dark→Bright ramp), the per-character light buffer, gamma-space
+alpha blending (the translucent overskirt reads slightly more opaque) and the
+rig.
 
 ## Portraits
 

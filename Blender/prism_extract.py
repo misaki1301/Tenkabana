@@ -1,13 +1,17 @@
 """Read a Tenkabana export's .unity3d bundles and write what Blender needs.
 
     pip install UnityPy
-    python prism_extract.py <export folder> [--out <folder>]
+    python prism_extract.py <export folder> [<more folders>...] [--out <folder>]
 
-Writes <export>/blender/ (or --out):
+Several folders are read as one model: a costume export plus the idol's face or
+whole-character export, so real parts replace the base-body placeholders.
+
+Writes <first export>/blender/ (or --out):
 
     model.glb        every renderer as its own object, in the bind pose, with
-                     both UV sets, one material slot per submesh and the
-                     outline directions the game bakes into tangents
+                     both UV sets, one material slot per submesh, the
+                     outline directions the game bakes into tangents, and
+                     blendshapes (bust, expressions) as morph targets
     materials.json   which object uses which material, and every material's
                      shader, textures, floats and colours as the game set them
     textures/*.png   the textures those materials reference, plus
@@ -42,6 +46,12 @@ RUNTIME_ROLES = (
     ("eye", re.compile(r"^eyesclera", re.I)),
     ("skin", re.compile(r"^bodyskin", re.I)),
     ("hair", re.compile(r"^inback", re.I)),
+)
+
+
+MAIN_ROLE_PARTS = (
+    ("face", re.compile(r"^face$", re.I)),
+    ("eye", re.compile(r"^eyesclera", re.I)),
 )
 
 
@@ -85,6 +95,84 @@ def material_info(mat):
     }, [t for t in (pptr_read(env.m_Texture) for _, env in sp.m_TexEnvs) if t is not None]
 
 
+def blendshapes(mesh, n):
+    """[(name, position deltas, normal deltas)] at each channel's full weight."""
+    sh = getattr(mesh, "m_Shapes", None)
+    if not sh or not sh.channels:
+        return []
+    out = []
+    for ch in sh.channels:
+        frame = sh.shapes[ch.frameIndex + ch.frameCount - 1]
+        pos = [0.0] * (n * 3)
+        nrm = [0.0] * (n * 3) if frame.hasNormals else None
+        for v in sh.vertices[frame.firstVertex:frame.firstVertex + frame.vertexCount]:
+            i = v.index
+            if i >= n:
+                continue
+            pos[3 * i:3 * i + 3] = (-v.vertex.x, v.vertex.y, v.vertex.z)
+            if nrm is not None:
+                nrm[3 * i:3 * i + 3] = (-v.normal.x, v.normal.y, v.normal.z)
+        # 'face_GP.eye_L_close' -> 'eye_L_close'
+        out.append((ch.name.split(".")[-1], pos, nrm))
+    return out
+
+
+def _trs(t):
+    p, q, s = t.m_LocalPosition, t.m_LocalRotation, t.m_LocalScale
+    x, y, z, w = q.x, q.y, q.z, q.w
+    r = ((1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)),
+         (2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)),
+         (2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)))
+    sc = (s.x, s.y, s.z)
+    return [[r[i][0] * sc[0], r[i][1] * sc[1], r[i][2] * sc[2], (p.x, p.y, p.z)[i]] for i in range(3)] + [[0, 0, 0, 1]]
+
+
+def _mul(a, b):
+    return [[sum(a[i][k] * b[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
+
+
+def world_matrix(transform):
+    m = _trs(transform)
+    parent = pptr_read(transform.m_Father)
+    return _mul(world_matrix(parent), m) if parent is not None else m
+
+
+def transform_of(obj):
+    if obj is None:
+        return None
+    if obj.object_reader.type.name == "Transform":
+        return obj
+    for comp in getattr(obj, "m_Component", []):
+        c = pptr_read(getattr(comp, "component", comp))
+        if c is not None and c.object_reader.type.name == "Transform":
+            return c
+    return None
+
+
+def angel_ring(env):
+    """Head-sphere centre and radius from the hair's AngelRingController."""
+    for obj in env.objects:
+        if obj.type.name != "MonoBehaviour":
+            continue
+        try:
+            mb = obj.read()
+            if mb.m_Script.read().m_ClassName != "AngelRingController":
+                continue
+            tt = obj.read_typetree()
+        except Exception:
+            continue
+        base = transform_of(pptr_read(mb.baseObject)) if hasattr(mb, "baseObject") else None
+        if base is None:
+            continue
+        m = world_matrix(base)
+        o = tt["offset"]
+        local = (o["x"], o["y"], o["z"], 1.0)
+        center = [sum(m[i][k] * local[k] for k in range(4)) for i in range(3)]
+        return {"center": center, "radius": tt.get("sphereRadius", 0.12),
+                "tilt_top_rate": tt.get("tiltTopRate", 0.0)}
+    return None
+
+
 def mesh_of(renderer, go):
     if renderer.object_reader.type.name == "SkinnedMeshRenderer":
         return pptr_read(renderer.m_Mesh)
@@ -125,7 +213,7 @@ class Glb:
             self.materials.append({"name": name})
         return self.mat_index[name]
 
-    def add(self, name, h, submesh_tris, materials):
+    def add(self, name, h, submesh_tris, materials, shapes=()):
         n = h.m_VertexCount
         # Unity is left-handed Y-up; glTF right-handed Y-up: mirror X.
         pos = [c for v in h.m_Vertices for c in (-v[0], v[1], v[2])]
@@ -145,6 +233,12 @@ class Glb:
             if uv:
                 attrs[f"TEXCOORD_{i}"] = self._accessor(
                     [c for t in uv for c in (t[0], 1.0 - t[1])], "f", n, "VEC2", 5126, 34962)
+        targets = []
+        for _, pos, nrm in shapes:
+            t = {"POSITION": self._accessor(pos, "f", n, "VEC3", 5126, 34962, minmax=True)}
+            if nrm is not None:
+                t["NORMAL"] = self._accessor(nrm, "f", n, "VEC3", 5126, 34962)
+            targets.append(t)
         prims = []
         for si, tris in enumerate(submesh_tris):
             if not tris:
@@ -155,9 +249,15 @@ class Glb:
                  "indices": self._accessor(idx, "I", len(idx), "SCALAR", 5125, 34963)}
             if materials:
                 p["material"] = self.material(materials[min(si, len(materials) - 1)])
+            if targets:
+                p["targets"] = targets
             prims.append(p)
         if prims:
-            self.meshes.append({"name": name, "primitives": prims})
+            mesh = {"name": name, "primitives": prims}
+            if shapes:
+                mesh["weights"] = [0.0] * len(shapes)
+                mesh["extras"] = {"targetNames": [nm for nm, _, _ in shapes]}
+            self.meshes.append(mesh)
             self.nodes.append({"name": name, "mesh": len(self.meshes) - 1})
 
     def write(self, path):
@@ -240,18 +340,27 @@ def write_equirect(cube, path, width=512):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("export")
+    ap.add_argument("export", nargs="+")
     ap.add_argument("--out")
     args = ap.parse_args()
 
-    src = os.path.abspath(args.export)
+    srcs = [os.path.abspath(p) for p in args.export]
+    src = srcs[0]
     out = os.path.abspath(args.out or os.path.join(src, "blender"))
     tex_dir = os.path.join(out, "textures")
     os.makedirs(tex_dir, exist_ok=True)
 
-    bundles = [os.path.join(src, f) for f in sorted(os.listdir(src)) if f.endswith(".unity3d")]
+    bundles, seen_files = [], set()
+    for folder in srcs:
+        for f in sorted(os.listdir(folder)):
+            # Exports name bundles <asset>__<hash>.unity3d; the same hash in two
+            # folders is the same bundle.
+            key = f.rsplit("__", 1)[-1]
+            if f.endswith(".unity3d") and key not in seen_files:
+                seen_files.add(key)
+                bundles.append(os.path.join(folder, f))
     if not bundles:
-        sys.exit(f"no .unity3d bundles in {src}")
+        sys.exit(f"no .unity3d bundles in {', '.join(srcs)}")
     env = UnityPy.load(*bundles)
 
     materials, textures, renderers = {}, {}, []
@@ -299,8 +408,15 @@ def main():
         h.process()
         if h.m_VertexCount < 8:
             continue
+        # Costume holders win for the role's main part (the costume's face
+        # texture carries its makeup), as the game assigns them at runtime.
+        main_role = next((r for r, rx in MAIN_ROLE_PARTS if rx.match(name)), None)
+        if main_role and holders.get(main_role) and not all(is_placeholder(m) for m in mats):
+            mats = [holders[main_role]] * max(1, len(mats))
         if all(is_placeholder(m) for m in mats):
-            if name.lower() in costume:
+            # The costume's own part replaces the base one: same name, or a
+            # variant of it ('BodySkin' -> 'bodyskin_BS_b').
+            if any(c == name.lower() or c.startswith(name.lower() + "_") for c in costume):
                 skipped.append({"name": name, "why": "replaced by the costume's own part"})
                 continue
             role = next((role for role, rx in RUNTIME_ROLES if rx.match(name)), None)
@@ -315,9 +431,11 @@ def main():
         mats = mats[:len(tris)] or mats
         unique = name if name not in seen else f"{name}.{seen[name]:03d}"
         seen[name] = seen.get(name, 0) + 1
-        glb.add(unique, h, tris, mats)
+        shapes = blendshapes(mesh, h.m_VertexCount)
+        glb.add(unique, h, tris, mats, shapes)
         objects.append({"name": unique, "mesh": mesh.m_Name, "vertices": h.m_VertexCount,
-                        "materials": mats, "extra_passes": extra, "has_uv2": bool(h.m_UV1)})
+                        "materials": mats, "extra_passes": extra, "has_uv2": bool(h.m_UV1),
+                        "shape_keys": [nm for nm, _, _ in shapes]})
 
     glb.write(os.path.join(out, "model.glb"))
 
@@ -340,6 +458,8 @@ def main():
     with open(os.path.join(out, "materials.json"), "w", encoding="utf-8") as f:
         json.dump({"source": os.path.basename(src),
                    "idol": int(next(g for g in m.groups() if g)) if m else None,
+                   "roles": {r: m for r, m in holders.items() if m},
+                   "angel_ring": angel_ring(env),
                    "objects": objects, "skipped": skipped,
                    "materials": materials, "textures": written}, f, indent=1)
 
