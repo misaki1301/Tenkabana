@@ -2,6 +2,7 @@
 using System.Text;
 using System.Windows;
 using Velopack;
+using Tenkabana.Interop;
 using Tenkabana.Models;
 using Tenkabana.Services;
 
@@ -28,6 +29,7 @@ public partial class App : Application
         catch (Exception ex) { log.AppendLine($"ERROR {ex.GetType().Name}: {ex.Message}"); }
         try { File.WriteAllText(Path.Combine(ToolsDir, "cabmap-result.txt"), log.ToString(), new UTF8Encoding(false)); }
         catch { }
+        ParentConsole.Write(log.ToString());
     }
 
     /// <summary>
@@ -82,6 +84,7 @@ public partial class App : Application
             File.WriteAllText(Path.Combine(outDir, "costume-result.txt"), log.ToString(), new UTF8Encoding(false));
         }
         catch { }
+        ParentConsole.Write(log.ToString());
     }
 
     /// <summary>Tenkabana.exe --export-asset m_hair_15_005_00000.prefab --out D:\out --with-deps --blender</summary>
@@ -135,6 +138,7 @@ public partial class App : Application
             File.WriteAllText(Path.Combine(outDir, "asset-result.txt"), log.ToString(), new UTF8Encoding(false));
         }
         catch { }
+        ParentConsole.Write(log.ToString());
     }
 
     /// <summary>
@@ -156,6 +160,9 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (e.Args.Any(a => a.StartsWith("--", StringComparison.Ordinal)))
+            ParentConsole.Attach();
 
         if (e.Args.Contains("--build-cabmap", StringComparer.OrdinalIgnoreCase))
         {
@@ -190,7 +197,7 @@ public partial class App : Application
 
     /// <summary>
     /// Headless mode:
-    ///   Tenkabana.exe --extract tenka,amana --out D:\path [--kinds mesh,texture]
+    ///   Tenkabana.exe --extract tenka,amana --out D:\path [--kinds mesh,texture] [--with-deps] [--blender]
     /// Writes a summary to &lt;out&gt;\cli-result.txt so it can be scripted.
     /// </summary>
     private static async Task RunCliAsync(string[] args)
@@ -246,6 +253,21 @@ public partial class App : Application
                 var progress = new Progress<(int, int, string)>();
                 var r = await ex.RunAsync(new ExtractRequest(idols, kinds, outDir, withDeps), progress);
                 log.AppendLine($"RESULT bundles={r.Bundles} deps={r.DependencyBundles} bytes={r.Bytes} names={r.NamesMatched} out={r.OutputDir}");
+
+                if (args.Contains("--blender", StringComparer.OrdinalIgnoreCase))
+                {
+                    // One folder per idol, named as Extractor.RunAsync writes them.
+                    foreach (var i in idols)
+                    {
+                        var dir = Path.Combine(r.OutputDir, $"{i.Id:D2}_{i.Name}");
+                        if (!Directory.Exists(dir)) continue;
+                        var b = await BlenderExport.ConvertAsync(dir, progress);
+                        log.AppendLine(b.Error is null
+                            ? $"BLENDER {i.Name} meshes={b.Meshes} textures={b.Textures} out={b.OutputDir}"
+                            : $"BLENDER ERROR {b.Error}");
+                        if (b.Error is not null) break;
+                    }
+                }
             }
         }
         catch (Exception ex) { log.AppendLine($"ERROR {ex.GetType().Name}: {ex.Message}"); }
@@ -256,5 +278,6 @@ public partial class App : Application
             File.WriteAllText(Path.Combine(outDir, "cli-result.txt"), log.ToString(), new UTF8Encoding(false));
         }
         catch { }
+        ParentConsole.Write(log.ToString());
     }
 }

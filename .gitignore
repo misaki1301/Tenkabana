@@ -16,3 +16,11 @@ publish/
 Installer/astudio/
 .vs/
 Releases/
+
+# Blender scenes built by Blender/build_template.py
+*.blend
+*.blend1
+
+# Python bytecode from running the Blender scripts
+__pycache__/
+*.pyc

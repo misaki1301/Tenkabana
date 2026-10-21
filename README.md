@@ -58,6 +58,26 @@ Tenkabana.exe --build-cabmap
 Idols take names or numeric ids. `--kinds mesh,texture,animation,other` filters
 by asset type.
 
+## Releases and updates
+
+Pushing a `v*` tag releases that version:
+
+```
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+`release.yml` builds it, packs it with [Velopack](https://velopack.io) and
+publishes a GitHub release with the installer and update packages.
+
+Installed copies update themselves from those releases. They check on startup
+and every 6 hours, and download a newer version in the background. Then an
+**Update to x.y.z** button appears: click it to restart into the new version,
+or ignore it and the update installs when you close Tenkabana. The button won't
+restart in the middle of an export.
+
+Builds run from `bin/` or a portable unzip don't update.
+
 ---
 
 ## How it works
@@ -136,8 +156,9 @@ groups everything else by looking up its number.
   the outfit.
 - A costume only exists in the cache once the client has downloaded it, which in
   practice means ones you own or have displayed.
-- `_col` base colour, `_rmask` packed mask map, `_smask` shadow, `_spmap`
-  specular, `_rnoise` hair anisotropy.
+- `_col` base colour, `_Rmask` rim-light mask, `_Smask` shadow, `_SPmap`
+  specular (R mask, G roughness, B metallic), `_Rnoise` angel-ring noise. The
+  materials say so: see below.
 
 ## Limitation: no rig
 
@@ -157,6 +178,93 @@ Height is a uniform scale you can apply by hand. Bust needs a rig.
 For a rigged model, point [AssetRipper](https://github.com/AssetRipper/AssetRipper)
 at the `.unity3d` bundles left in every export folder and export FBX or glTF.
 Same source data, keeps bone weights and blendshapes.
+
+## The game's shading, in Blender
+
+Characters are drawn by five URP shaders: `Anim2D3D/CharacterOutline`,
+`Hair`, `EyeBall`, `FakeShadow` and `Character Unlit`. Their D3D11 bytecode
+ships in the bundles, so their maths can be read (DXBC → SPIR-V with vkd3d →
+GLSL with spirv-cross, with constant-buffer slots named from Unity's parameter
+blobs). `Blender/tenkabana_toon.py` rebuilds them as node groups.
+
+What they do, which isn't what a toon shader usually does:
+
+- **Shading is mostly painted.** Diffuse is `albedo × lerp(_DarkColor,
+  _BrightColor, ramp)`, where the ramp thresholds `ShadeTex.r × ½(N·L + 1)` and
+  the result is scaled by `_ShadeEffect`. Skin and face set Dark = Bright,
+  so they get no light-dependent shadow. Amana's 14mgar dress gets a faint
+  purple one.
+- **`_SPmap`** packs specular mask / roughness / metallic for a GGX-style
+  highlight (the game takes a square root of it). **`_Rmask`** gates a
+  view-dependent rim.
+- **The angel ring** isn't in the hair texture. The view ray is intersected
+  with a 12 cm sphere at the head centre, and that direction, jittered by
+  `_Rnoise` on the second UV set, samples a ring cubemap.
+- **The fake hair shadow** is the front hair drawn again 6 mm away from the
+  light as a flat multiply, stencilled onto the face.
+- **Outlines** extrude along directions baked into the mesh tangents, sideways
+  in screen space only, pushed back in depth, masked by `_OutlineTex`.
+- **It's gamma-space.** The maths runs on raw sRGB values.
+
+A few inputs are per-stage globals set at runtime (rim power, diffuse border,
+light colour). They aren't in any bundle, so they live in one **TKB Prism
+Globals** group, editable from the sidebar. Where a screenshot pins them down,
+they're measured rather than guessed:
+
+- **Skin shadow.** Skin and face materials ship Dark = Bright (no shadow), but
+  in-game shadowed skin is exactly texture × (0.886, 0.745, 0.739). The game
+  swaps in a warm Dark colour at runtime; *Skin Shadow* reproduces it, and the
+  rendered shadow matches the screenshot within one level per channel.
+- **Diffuse border.** 0.45 with a hard 0.05 blur. The face (ShadeOn = 0, t fixed
+  at 0.5) has to stay lit, and the arm terminator in-game is 2–3 px wide.
+
+### Getting the exact materials
+
+```
+pip install UnityPy
+python Blender/prism_extract.py D:\out\14mgar [D:\out\14_amana ...]
+```
+
+Pass several folders to merge a costume with the idol's own face/character
+export. A costume prefab only carries generic stand-ins for the eyes, lashes,
+teeth and brows (from a shared `new_anim.fbx`), so the eye shape and the
+smile expressions only appear once the idol's face prefab is included.
+
+This reads the export's bundles and writes `blender/` next to them:
+
+- `model.glb`: each part as its own object, with both UV sets, real submesh
+  material slots, the baked outline directions and the blendshapes as shape
+  keys (bust gets the idol's value; eye close, A/I/U/E/O are there to pose)
+- `materials.json`: which part uses which material, with every value the
+  game's materials set
+- the referenced textures, with the ring cubemap unwrapped to an equirect
+
+It also resolves the base-body placeholders the way the game does at runtime:
+face parts get the costume's face material, eyes get the eye material, and
+parts the costume replaces are dropped. Every `--blender` export includes the
+script.
+
+Then install `tenkabana_toon.py` (*Edit › Preferences › Add-ons › Install from
+Disk*) and use **Import** in the **Tenkabana** sidebar tab. Without the
+extractor's output, Import falls back to matching OBJ parts to textures by name
+with typical material values. That's close, but not exact.
+
+### Template scene
+
+```
+blender -b -P Blender/build_template.py -- --export D:\out\14mgar --render amana.png
+blender -b -P Blender/build_template.py -- --out amana_template.blend
+```
+
+With `--export`, it builds a camera, key light, stage and the imported
+character. Without it, it builds a stand-in mannequin in Amana's palette from
+generated textures. `--idol` picks someone else; `--engine cycles` renders
+without a GPU.
+
+**Not reproduced:** real-time self-shadows (the game's `PrismSelfShadow` map
+feeds the same Dark→Bright ramp), the per-character light buffer, gamma-space
+alpha blending (the translucent overskirt reads slightly more opaque) and the
+rig.
 
 ## Portraits
 

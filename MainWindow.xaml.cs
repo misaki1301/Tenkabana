@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Windows.Media.Media3D;
 using System.Windows.Input;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using Tenkabana.Interop;
 using Tenkabana.Models;
@@ -29,6 +30,7 @@ public partial class MainWindow : Window
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "prism_extract");
     private CancellationTokenSource? _cts;
     private bool _busy;
+    private DispatcherTimer? _updateTimer;
 
     private PreviewService? _preview;
     private List<AssetRow> _assetRows = new();
@@ -158,6 +160,10 @@ public partial class MainWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // First, and independent of the index: a fresh install has none yet, and a
+        // release that breaks index loading must still be able to update itself.
+        _ = CheckForUpdateAsync();
+
         if (!File.Exists(IndexPath))
         {
             SubtitleLabel.Text = $"No index found at {IndexPath}";
@@ -199,8 +205,6 @@ public partial class MainWindow : Window
             IdolList.ItemsSource = Idol.All;
             SubtitleLabel.Text =
                 $"{idx.NameCount:N0} assets indexed  ·  {Idol.All.Count(i => i.AssetCount > 0)} of {Idol.All.Count} characters cached";
-
-            _ = CheckForUpdateAsync();
         }
         catch (Exception ex)
         {
@@ -210,12 +214,44 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Non-blocking, best effort: a failed check must never hold up startup.</summary>
+    /// <summary>
+    /// Non-blocking, best effort: check GitHub Releases, download anything newer in
+    /// the background, then offer it. Repeats every few hours while the app is open.
+    /// </summary>
     private async Task CheckForUpdateAsync()
     {
-        var r = await Updater.CheckAsync();
-        if (r.Available && r.Version is not null)
-            SubtitleLabel.Text += $"   ·   update {r.Version} available";
+        if (!Updater.IsInstalled) return;   // dev or portable build
+
+        if (_updateTimer is null)
+        {
+            _updateTimer = new DispatcherTimer { Interval = Updater.CheckInterval };
+            _updateTimer.Tick += async (_, _) => await CheckForUpdateAsync();
+            _updateTimer.Start();
+        }
+
+        var version = await Updater.CheckAndDownloadAsync();
+        if (version is null) return;
+        UpdateButton.Content = $"Update to {version}";
+        UpdateButton.Visibility = Visibility.Visible;
+    }
+
+    private void OnUpdate(object sender, RoutedEventArgs e)
+    {
+        // Restarting mid-export would leave a half-written folder behind.
+        if (_busy)
+        {
+            StatusLabel.Text = "Finish or cancel the current job, then update.";
+            return;
+        }
+        Updater.ApplyAndRestart();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _updateTimer?.Stop();
+        // A downloaded update the user didn't restart for installs on the way out.
+        Updater.ApplyOnExit();
+        base.OnClosed(e);
     }
 
     private static ImageSource? LoadPortrait(int id)
