@@ -22,6 +22,10 @@
                    Text="Loading index..."/>
       </StackPanel>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+        <!-- Shown once a newer GitHub release has downloaded in the background. -->
+        <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" Visibility="Collapsed"
+                Click="OnUpdate" Margin="0,0,8,0"
+                ToolTip="Restart now to install it. Otherwise it installs when you close Tenkabana."/>
         <Button x:Name="RefreshButton" Content="Refresh index" Style="{StaticResource StandardButton}"
                 Click="OnRefresh" Margin="0,0,8,0"/>
         <Button x:Name="OpenOutButton" Content="Open output" Style="{StaticResource StandardButton}"

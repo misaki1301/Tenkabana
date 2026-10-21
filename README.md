@@ -58,6 +58,26 @@ Tenkabana.exe --build-cabmap
 Idols take names or numeric ids. `--kinds mesh,texture,animation,other` filters
 by asset type.
 
+## Releases and updates
+
+Pushing a `v*` tag releases that version:
+
+```
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+`release.yml` builds it, packs it with [Velopack](https://velopack.io) and
+publishes a GitHub release with the installer and update packages.
+
+Installed copies update themselves from those releases. They check on startup
+and every 6 hours, and download a newer version in the background. Then an
+**Update to x.y.z** button appears: click it to restart into the new version,
+or ignore it and the update installs when you close Tenkabana. The button won't
+restart in the middle of an export.
+
+Builds run from `bin/` or a portable unzip don't update.
+
 ---
 
 ## How it works
