@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _cts;
     private bool _busy;
     private DispatcherTimer? _updateTimer;
+    private UpdateOffer? _offer;
 
     private PreviewService? _preview;
     private List<AssetRow> _assetRows = new();
@@ -215,11 +216,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Non-blocking, best effort: check GitHub Releases, download anything newer in
-    /// the background, then offer it. Repeats every few hours while the app is open.
+    /// Non-blocking, best effort: ask GitHub Releases whether something newer
+    /// exists and, if so, show the Update button. Downloads nothing. Repeats every
+    /// few hours while the app is open.
     /// </summary>
     private async Task CheckForUpdateAsync()
     {
+        VersionRun.Text = "v" + Updater.CurrentVersion;
         if (!Updater.IsInstalled) return;   // dev or portable build
 
         if (_updateTimer is null)
@@ -229,28 +232,66 @@ public partial class MainWindow : Window
             _updateTimer.Start();
         }
 
-        var version = await Updater.CheckAndDownloadAsync();
-        if (version is null) return;
-        UpdateButton.Content = $"Update to {version}";
+        ShowOffer(await Updater.CheckAsync());
+    }
+
+    private void ShowOffer(UpdateOffer? offer)
+    {
+        _offer = offer;
+        if (offer is null)
+        {
+            UpdateButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+        UpdateButton.Content = $"Update available · {offer.NewVersion}";
         UpdateButton.Visibility = Visibility.Visible;
     }
 
     private void OnUpdate(object sender, RoutedEventArgs e)
     {
-        // Restarting mid-export would leave a half-written folder behind.
-        if (_busy)
+        if (_offer is not null) ShowUpdateDialog(_offer);
+    }
+
+    /// <summary>The user asked: check now, including a version they skipped before.</summary>
+    private async void OnCheckForUpdates(object sender, RoutedEventArgs e)
+    {
+        if (!Updater.IsInstalled)
         {
-            StatusLabel.Text = "Finish or cancel the current job, then update.";
+            StatusLabel.Text = "Updates are only available in the installed version. " +
+                               "Releases are at github.com/misaki1301/Tenkabana/releases.";
             return;
         }
-        Updater.ApplyAndRestart();
+
+        CheckUpdatesLink.IsEnabled = false;
+        StatusLabel.Text = "Checking for updates...";
+        try
+        {
+            var offer = await Updater.CheckAsync(includeSkipped: true);
+            if (offer is null)
+            {
+                StatusLabel.Text = $"You're up to date (v{Updater.CurrentVersion}).";
+                return;
+            }
+            StatusLabel.Text = $"Tenkabana {offer.NewVersion} is available.";
+            ShowOffer(offer);
+            ShowUpdateDialog(offer);
+        }
+        finally
+        {
+            CheckUpdatesLink.IsEnabled = true;
+        }
+    }
+
+    private void ShowUpdateDialog(UpdateOffer offer)
+    {
+        var dlg = new UpdateWindow(offer, () => _busy) { Owner = this };
+        dlg.ShowDialog();   // "Update and restart" never returns here: the app restarts
+        if (dlg.Skipped) ShowOffer(null);
     }
 
     protected override void OnClosed(EventArgs e)
     {
         _updateTimer?.Stop();
-        // A downloaded update the user didn't restart for installs on the way out.
-        Updater.ApplyOnExit();
         base.OnClosed(e);
     }
 

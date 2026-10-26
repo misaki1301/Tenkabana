@@ -68,15 +68,23 @@ git push origin v1.1.0
 ```
 
 `release.yml` builds it, packs it with [Velopack](https://velopack.io) and
-publishes a GitHub release with the installer and update packages.
+publishes a GitHub release with the installer and update packages. The release
+notes are generated from what was merged since the previous tag.
 
-Installed copies update themselves from those releases. They check on startup
-and every 6 hours, and download a newer version in the background. Then an
-**Update to x.y.z** button appears: click it to restart into the new version,
-or ignore it and the update installs when you close Tenkabana. The button won't
-restart in the middle of an export.
+Installed copies never update on their own. They check GitHub on startup and
+every 6 hours, and only download when you choose to:
 
-Builds run from `bin/` or a portable unzip don't update.
+1. When a newer release exists, an **Update available · x.y.z** button appears
+   in the header. **Check for updates** next to the version does the same on
+   demand.
+2. The button opens the changelog for every release between your version and
+   the new one.
+3. From there you pick **Update and restart** (download, with progress and
+   Cancel, then install), **Later**, or **Skip this version** (no more
+   reminders for that version; **Check for updates** still finds it).
+
+Nothing installs on exit, and an update won't restart the app in the middle of
+an export. Builds run from `bin/` or a portable unzip don't update.
 
 ---
 

@@ -20,12 +20,19 @@
         <TextBlock Text="Tenkabana" Style="{StaticResource TitleText}"/>
         <TextBlock x:Name="SubtitleLabel" Style="{StaticResource CaptionText}" Margin="0,2,0,0"
                    Text="Loading index..."/>
+        <TextBlock Style="{StaticResource CaptionText}" Margin="0,2,0,0">
+          <Run x:Name="VersionRun" Text="v1.0.0"/>
+          <Run Text="  ·  "/>
+          <Hyperlink x:Name="CheckUpdatesLink" Click="OnCheckForUpdates"
+                     Foreground="{DynamicResource Accent}">Check for updates</Hyperlink>
+        </TextBlock>
       </StackPanel>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-        <!-- Shown once a newer GitHub release has downloaded in the background. -->
+        <!-- Shown when a newer GitHub release exists. Opens the changelog; nothing
+             downloads until the user chooses to update there. -->
         <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" Visibility="Collapsed"
                 Click="OnUpdate" Margin="0,0,8,0"
-                ToolTip="Restart now to install it. Otherwise it installs when you close Tenkabana."/>
+                ToolTip="See what's new and decide whether to update."/>
         <Button x:Name="RefreshButton" Content="Refresh index" Style="{StaticResource StandardButton}"
                 Click="OnRefresh" Margin="0,0,8,0"/>
         <Button x:Name="OpenOutButton" Content="Open output" Style="{StaticResource StandardButton}"
