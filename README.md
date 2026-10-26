@@ -209,7 +209,10 @@ What they do, which isn't what a toon shader usually does:
   with a 12 cm sphere at the head centre, and that direction, jittered by
   `_Rnoise` on the second UV set, samples a ring cubemap.
 - **The fake hair shadow** is the front hair drawn again 6 mm away from the
-  light as a flat multiply, stencilled onto the face.
+  light as a flat multiply, stencilled onto the face. Blender has no stencil,
+  so a Geometry Nodes modifier lays the shifted copy onto the face surface
+  (0.6 mm above it); the real bangs are always in front of it, so it darkens
+  only skin. Without that, the copy darkens the bangs themselves in blotches.
 - **Outlines** extrude along directions baked into the mesh tangents, sideways
   in screen space only, pushed back in depth, masked by `_OutlineTex`.
 - **It's gamma-space.** The maths runs on raw sRGB values.
@@ -256,6 +259,27 @@ Then install `tenkabana_toon.py` (*Edit › Preferences › Add-ons › Install 
 Disk*) and use **Import** in the **Tenkabana** sidebar tab. Without the
 extractor's output, Import falls back to matching OBJ parts to textures by name
 with typical material values. That's close, but not exact.
+
+### MMD-ready rig
+
+`tenkabana_mmd.py` is a second add-on (install it the same way). Select the
+character's armature and press **Convert to MMD** in the **Tenkabana MMD**
+panel. It works in place on the game's humanoid skeleton:
+
+- points every limb bone at its child, so IK and twist have a real axis;
+- re-rests the arms at the MMD A-pose (35° by default), baking the change into
+  the meshes, shape keys, custom normals and outline directions. VMD arm keys
+  assume that pose; on the game's T-pose they bend elbows and twist forearms;
+- adds `全ての親` / `センター` / `グルーブ`, leg and toe IK with knee limits;
+- drives the game's `*_rot` twist helpers so wrist and shoulder twist spreads
+  along the limb instead of pinching one ring of vertices;
+- keeps at most 4 normalised weights per vertex (PMX BDEF4);
+- renames bones to the MMD standard names (vertex groups follow) and fills
+  mmd_tools' Japanese/English names when that add-on is installed.
+
+Then load a dance with mmd_tools' *Import Motion*. Use a motion made for a
+normal-proportioned model: chibi variants (ちび, ぷち) move the IK feet and
+centre for short legs. Actions made before converting no longer match.
 
 ### Template scene
 

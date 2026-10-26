@@ -17,6 +17,14 @@
     <StartupObject>Tenkabana.App</StartupObject>
   </PropertyGroup>
 
+  <!-- Local working folders (game data, other tools' projects) are not app sources. -->
+  <ItemGroup>
+    <Compile Remove="work\**;context\**" />
+    <Page Remove="work\**;context\**" />
+    <None Remove="work\**;context\**" />
+    <Content Remove="work\**;context\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
     <Page Include="App.xaml" />
@@ -31,6 +39,7 @@
   <!-- Written into every Blender export by BlenderExport.WriteScripts. -->
   <ItemGroup>
     <EmbeddedResource Include="Blender\tenkabana_toon.py" LogicalName="tenkabana_toon.py" />
+    <EmbeddedResource Include="Blender\tenkabana_mmd.py" LogicalName="tenkabana_mmd.py" />
     <EmbeddedResource Include="Blender\build_template.py" LogicalName="build_template.py" />
     <EmbeddedResource Include="Blender\prism_extract.py" LogicalName="prism_extract.py" />
   </ItemGroup>

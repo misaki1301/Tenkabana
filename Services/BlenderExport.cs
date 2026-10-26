@@ -67,11 +67,11 @@ public static class BlenderExport
         }, ct);
     }
 
-    /// <summary>Drop the Blender add-on, template builder and material extractor next to the export.</summary>
+    /// <summary>Drop the Blender add-ons, template builder and material extractor next to the export.</summary>
     private static void WriteScripts(string dir)
     {
         var asm = typeof(BlenderExport).Assembly;
-        foreach (var name in new[] { "tenkabana_toon.py", "build_template.py", "prism_extract.py" })
+        foreach (var name in new[] { "tenkabana_toon.py", "tenkabana_mmd.py", "build_template.py", "prism_extract.py" })
         {
             try
             {

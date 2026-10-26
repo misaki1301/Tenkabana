@@ -20,7 +20,10 @@ What the game does, and so what this does:
                 RingMask.a on UV2.
     Eye         sclera * _Color, iris and highlight alpha-blended over it.
     FakeShadow  the front hair redrawn 6 mm away from the light as a flat
-                multiply over the face.
+                multiply over the face. The game limits it to skin with a
+                stencil; here the shifted copy is laid onto the face surface
+                (Geometry Nodes), so the real bangs always cover it and it can
+                only darken skin, never the hair itself.
     Outline     inverted hull (Geometry Nodes) along the game's baked outline
                 directions, in the camera's view plane, _OutlineWidth metres
                 masked by _OutlineTex, pushed back by _OutlineAdjust.
@@ -98,6 +101,8 @@ EYE_GROUP = "TKB Prism Eye"
 UNLIT_GROUP = "TKB Prism Unlit"
 OUTLINE_MOD = "TKB Outline"
 OUTLINE_GROUP = "TKB Outline Width"
+DECAL_MOD = "TKB Fake Shadow Decal"
+DECAL_GROUP = "TKB Fake Shadow Decal"
 
 # Light direction from the key light's world euler (XYZ): its +Z axis.
 _AXIS_EXPR = (
@@ -715,6 +720,7 @@ def build_prism_material(name, info, images, uv2=None, role=None, ring=None):
     # What the outline pass needs, read later by add_outline.
     outline = shader == "Hair" or (shader == "CharacterOutline" and _flt(info, "_OutlineSettingGroups", 1.0))
     mat["tkb_shader"] = shader
+    mat["tkb_role"] = role or ""
     mat["tkb_outline"] = bool(outline) and not blended
     mat["tkb_outline_width"] = _flt(info, "_OutlineWidth", 0.0005)
     mat["tkb_outline_adjust"] = _flt(info, "_OutlineAdjust", 1.0)
@@ -978,6 +984,82 @@ def add_fake_shadow(obj, mat, offset):
     return shadow
 
 
+def ensure_decal_group():
+    """Geometry Nodes: lay a mesh onto a skin object (stand-in for the game's stencil).
+
+    Every vertex moves to the nearest point of the skin surface, lifted `Lift` back
+    toward where it came from; vertices farther than `Max Distance` from the skin
+    (hair hanging clear of the face) are dropped.
+    """
+    tree = bpy.data.node_groups.get(DECAL_GROUP)
+    if tree is not None:
+        return tree
+    tree = bpy.data.node_groups.new(DECAL_GROUP, "GeometryNodeTree")
+    _socket(tree, "Geometry", "NodeSocketGeometry", "OUTPUT")
+    _socket(tree, "Geometry", "NodeSocketGeometry")
+    _socket(tree, "Skin", "NodeSocketObject")
+    _socket(tree, "Max Distance", "NodeSocketFloat", default=0.03)
+    _socket(tree, "Lift", "NodeSocketFloat", default=0.0006)
+    nodes, links = tree.nodes, tree.links
+    gin = nodes.new("NodeGroupInput")
+    gout = nodes.new("NodeGroupOutput")
+    info = nodes.new("GeometryNodeObjectInfo")
+    info.transform_space = "RELATIVE"
+    links.new(gin.outputs["Skin"], info.inputs["Object"])
+    prox = nodes.new("GeometryNodeProximity")
+    prox.target_element = "FACES"
+    links.new(info.outputs["Geometry"], prox.inputs["Target"])
+    pos = nodes.new("GeometryNodeInputPosition")
+    links.new(pos.outputs[0], prox.inputs["Source Position"])
+
+    far = nodes.new("FunctionNodeCompare")
+    far.data_type, far.operation = "FLOAT", "GREATER_THAN"
+    links.new(prox.outputs["Distance"], far.inputs["A"])
+    links.new(gin.outputs["Max Distance"], far.inputs["B"])
+    delete = nodes.new("GeometryNodeDeleteGeometry")
+    delete.domain = "POINT"
+    links.new(gin.outputs["Geometry"], delete.inputs["Geometry"])
+    links.new(far.outputs["Result"], delete.inputs["Selection"])
+
+    # nearest + normalize(position - nearest) * lift
+    away = nodes.new("ShaderNodeVectorMath")
+    away.operation = "SUBTRACT"
+    links.new(pos.outputs[0], away.inputs[0])
+    links.new(prox.outputs["Position"], away.inputs[1])
+    unit = nodes.new("ShaderNodeVectorMath")
+    unit.operation = "NORMALIZE"
+    links.new(away.outputs[0], unit.inputs[0])
+    lift = nodes.new("ShaderNodeVectorMath")
+    lift.operation = "SCALE"
+    links.new(unit.outputs[0], lift.inputs[0])
+    links.new(gin.outputs["Lift"], lift.inputs["Scale"])
+    target = nodes.new("ShaderNodeVectorMath")
+    target.operation = "ADD"
+    links.new(prox.outputs["Position"], target.inputs[0])
+    links.new(lift.outputs[0], target.inputs[1])
+    setp = nodes.new("GeometryNodeSetPosition")
+    links.new(delete.outputs["Geometry"], setp.inputs["Geometry"])
+    links.new(target.outputs[0], setp.inputs["Position"])
+    links.new(setp.outputs["Geometry"], gout.inputs["Geometry"])
+    return tree
+
+
+def attach_fake_shadow_decal(shadow, skin):
+    """Restrict a fake-shadow copy to `skin` (see ensure_decal_group)."""
+    mod = shadow.modifiers.get(DECAL_MOD) or shadow.modifiers.new(DECAL_MOD, "NODES")
+    mod.node_group = ensure_decal_group()
+    _set_input(mod, "Skin", skin)
+    return mod
+
+
+def skin_object(objects):
+    """The face mesh among `objects`: the one carrying a face-role material."""
+    for o in objects:
+        if o.type == "MESH" and any(m is not None and m.get("tkb_role") == "face" for m in o.data.materials):
+            return o
+    return next((o for o in objects if o.type == "MESH" and o.name.split(".")[0] == "face"), None)
+
+
 # ---------------------------------------------------------------------------
 # Import
 # ---------------------------------------------------------------------------
@@ -1017,6 +1099,7 @@ def import_prism(folder, idol=None, outline=True):
             o.parent = root
 
     built = {}
+    shadows = []
     role_of = {m: r for r, m in data.get("roles", {}).items()}
     for entry in data["objects"]:
         obj = meshes.get(entry["name"])
@@ -1042,8 +1125,12 @@ def import_prism(folder, idol=None, outline=True):
             info = data["materials"].get(extra, {})
             if (info.get("shader") or "").endswith("FakeShadow"):
                 fake = build_prism_material(f"TKB {extra}", info, images)
-                add_fake_shadow(obj, fake, info.get("floats", {}).get("_FakeShadowOffset", 0.006))
+                shadows.append(add_fake_shadow(obj, fake, info.get("floats", {}).get("_FakeShadowOffset", 0.006)))
 
+    skin = skin_object(new)
+    if skin is not None:
+        for shadow in shadows:
+            attach_fake_shadow_decal(shadow, skin)
     if idol is not None:
         apply_body([root], idol, new)
     setup_scene()
